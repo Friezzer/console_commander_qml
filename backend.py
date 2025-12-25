@@ -2,11 +2,17 @@ import sys
 import os
 import subprocess
 import locale
+import glob
 from datetime import datetime
 from PySide6.QtCore import QObject, Slot, Signal, Property
 from database import Session, Message, db
 
 class ConsoleBackend(QObject):
+    STANDARD_COMMANDS = [
+        "dir", "ls", "cd", "cls", "clear", "ping", "ipconfig", "ifconfig",
+        "echo", "mkdir", "md", "rmdir", "rd", "copy", "del", "help", "exit", "whoami"
+    ]
+     
     def __init__(self):
         super().__init__()
         self._current_session_id = None
@@ -158,11 +164,54 @@ class ConsoleBackend(QObject):
     @Slot(result=str)
     def get_next_command(self):
         """Возвращает следующую команду (стрелка ВНИЗ)"""
-        # Если мы не в конце списка
+        # если мы не в конце списка
         if self._buffer_index < len(self._command_buffer) - 1:
             self._buffer_index += 1
             return self._command_buffer[self._buffer_index]
         else:
-            # Если мы дошли до низа, возвращаем пустую строку (новая команда)
+            # если мы дошли до низа, возвращаем пустую строку (новая команда)
             self._buffer_index = len(self._command_buffer)
             return ""
+        
+    @Slot(str, result='QVariantList')
+    def get_suggestions(self, input_text):
+        """возвращает список файлов/папок для автоподстановки"""
+        
+        # если строка пустая, ничего не подсказываем
+        if not input_text:
+            return []
+
+        # берем последнее слово из введенной строки
+        # например, если ввели "cd Des", нам нужно искать совпадения для "Des"    
+        text = input_text.strip()
+        parts = input_text.split(' ')
+        prefix = parts[-1]
+        
+        results = []
+
+        if len(parts) == 1:
+            for cmd in self.STANDARD_COMMANDS:
+                if cmd.startswith(prefix):
+                    results.append(cmd)
+
+
+        # если префикс пустой, показываем все файлы
+        if not prefix:
+            search_pattern = os.path.join(self._current_directory, "*")
+        else:
+            search_pattern = os.path.join(self._current_directory, prefix + "*")
+
+        try:
+            # ищем файлы и папки
+            matches = glob.glob(search_pattern)                    
+            results = [os.path.basename(m) for m in matches]
+            results.sort()            
+            return results
+        except Exception as e:
+            print(f"Error in autocomplete: {e}")
+            return []
+        
+        results = list(set(results))
+        results.sort()
+        
+        return results
