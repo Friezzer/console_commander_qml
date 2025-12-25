@@ -113,6 +113,19 @@ Rectangle {
                                 text = "" 
                             }
                         }
+                        // стрелка вверх
+                        if (event.key === Qt.Key_Up) {
+                            var prevCmd = backend.get_prev_command()
+                            text = prevCmd
+                            event.accepted = true // Чтобы курсор не улетал в начало строки
+                        }
+
+                        // стрелка вниз
+                        if (event.key === Qt.Key_Down) {
+                            var nextCmd = backend.get_next_command()
+                            text = nextCmd
+                            event.accepted = true
+                        }
                     }
                 }
             }

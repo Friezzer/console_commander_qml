@@ -11,6 +11,10 @@ class ConsoleBackend(QObject):
         super().__init__()
         self._current_session_id = None
         self._current_directory = os.getcwd()
+
+        self._command_buffer = [] # cписок текстов команд
+        self._buffer_index = 0    # текущая позиция в истории
+
         if Session.select().count() == 0:
             self.create_session("Default Session")
         else:
@@ -52,6 +56,9 @@ class ConsoleBackend(QObject):
         """Выполняет команду, сохраняет её и результат в БД"""
         if not command_text.strip() or not self._current_session_id:
             return
+
+        self._command_buffer.append(command_text)
+        self._buffer_index = len(self._command_buffer)
 
         current_session = Session.get_by_id(self._current_session_id)
         Message.create(
@@ -130,3 +137,32 @@ class ConsoleBackend(QObject):
         self._current_session_id = session_id
         print(f"Loaded session ID: {session_id}")
         self.historyChanged.emit()
+        msgs = Message.select().where(
+            (Message.session == session_id) & (Message.message_type == 'command')
+        ).order_by(Message.timestamp)
+        
+        self._command_buffer = [m.text for m in msgs]
+        self._buffer_index = len(self._command_buffer)
+
+    @Slot(result=str)
+    def get_prev_command(self):
+        """Возвращает предыдущую команду (стрелка ВВЕРХ)"""
+        if self._buffer_index > 0:
+            self._buffer_index -= 1
+            return self._command_buffer[self._buffer_index]
+        elif self._buffer_index == 0 and self._command_buffer:
+            # Если мы в самом начале, возвращаем первую команду
+            return self._command_buffer[0]
+        return ""
+
+    @Slot(result=str)
+    def get_next_command(self):
+        """Возвращает следующую команду (стрелка ВНИЗ)"""
+        # Если мы не в конце списка
+        if self._buffer_index < len(self._command_buffer) - 1:
+            self._buffer_index += 1
+            return self._command_buffer[self._buffer_index]
+        else:
+            # Если мы дошли до низа, возвращаем пустую строку (новая команда)
+            self._buffer_index = len(self._command_buffer)
+            return ""
